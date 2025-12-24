@@ -1,0 +1,7 @@
+beautifulsoup4
+curl-cffi
+lxml
+pandas
+numpy
+python-dateutil
+matplotlib
