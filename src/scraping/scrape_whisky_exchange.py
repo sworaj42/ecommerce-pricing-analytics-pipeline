@@ -9,10 +9,8 @@ from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 from curl_cffi import requests
 
-# -------------------------
-# Configuration
-# -------------------------
 
+# Configuration
 CATEGORIES: Dict[str, str] = {
     "Single Malt": "https://www.thewhiskyexchange.com/c/40/single-malt-scotch-whisky",
     "Blended": "https://www.thewhiskyexchange.com/c/304/blended-scotch-whisky",
@@ -30,10 +28,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 ]
 
-# -------------------------
-# Path Helpers (Your Corrected Logic)
-# -------------------------
-
+# Path Helpers 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -42,10 +37,7 @@ def raw_data_path() -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
-# -------------------------
 # Network Logic
-# -------------------------
-
 def fetch_page(url: str, retries: int = 3) -> str:
     for attempt in range(retries):
         try:
@@ -67,10 +59,7 @@ def fetch_page(url: str, retries: int = 3) -> str:
     
     raise RuntimeError(f"Failed to fetch {url} after {retries} retries.")
 
-# -------------------------
 # Extraction Logic
-# -------------------------
-
 def parse_products(html: str, category: str) -> List[dict]:
     soup = BeautifulSoup(html, "html.parser")
     rows: List[dict] = []
@@ -96,12 +85,9 @@ def parse_products(html: str, category: str) -> List[dict]:
             id_match = re.search(r"/p/(\d+)/", href)
             if id_match:
                 p_id = id_match.group(1)
-                
-                # FIX: Working Image URL extraction (Check data-src for lazy-loading)
                 img_tag = card.find("img", class_="product-card__image")
                 img_url = ""
                 if img_tag:
-                    # data-src is used by TWE for the actual image; src is often a placeholder
                     img_url = img_tag.get("data-src") or img_tag.get("src") or ""
 
                 status_text = "In Stock"
@@ -139,10 +125,7 @@ def parse_products(html: str, category: str) -> List[dict]:
 
     return rows
 
-# -------------------------
 # Main Execution
-# -------------------------
-
 def scrape_whisky_exchange():
     all_data = []
     
