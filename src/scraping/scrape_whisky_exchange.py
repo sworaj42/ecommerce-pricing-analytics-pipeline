@@ -75,7 +75,7 @@ def parse_products(html: str, category: str) -> List[dict]:
                     break
                 except json.JSONDecodeError: continue
 
-    # 2. Extract HTML Card Data (URLs and WORKING Images)
+    # Extract HTML Card Data (URLs and WORKING Images)
     card_map = {}
     cards = soup.find_all("li", class_="product-grid__item")
     for card in cards:
@@ -102,7 +102,7 @@ def parse_products(html: str, category: str) -> List[dict]:
                     "status": status_text
                 }
 
-    # 3. Merge Data
+    # Merge Data
     for item in json_items:
         p_id = str(item.get("item_id"))
         card = card_map.get(p_id, {})
@@ -117,10 +117,10 @@ def parse_products(html: str, category: str) -> List[dict]:
             "price_gbp": item.get("price"),
             "unit_price_raw": card.get("unit_price").get_text(strip=True) if card.get("unit_price") else "",
             "region": item.get("item_category3") or "N/A",
-            "promo_label": item.get("item_category5") or "", # FIXED: Added Promo Label extraction
+            "promo_label": item.get("item_category5") or "", 
             "status": card.get("status", "Current"),
             "product_url": card.get("url", f"https://www.thewhiskyexchange.com/p/{p_id}/"),
-            "image_url": card.get("image", ""), # FIXED: Pulls correct image URL
+            "image_url": card.get("image", ""), 
         })
 
     return rows
