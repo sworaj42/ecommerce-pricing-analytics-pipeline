@@ -10,11 +10,12 @@ RAW_PATH = "../data/raw/whisky_raw.csv"
 OUT_PATH = "../data/processed/whisky_cleaned.csv"
 
 MISSING_TOKENS = {"", "none", "n/a", "na", "nan", "null", "undefined"}
-
 VALID_REGIONS = {"highland", "islay", "speyside", "lowland", "campbeltown", "island"}
 
 BRAND_REPLACEMENTS_CI = {
     "chivas": "Chivas Regal",
+    "chivas regal": "Chivas Regal",
+
     "various distilleries": "Independent/Unknown",
     "undisclosed distillery": "Independent/Unknown",
     "unknown distillery": "Independent/Unknown",
@@ -32,20 +33,20 @@ def _require_cols(df: pd.DataFrame, cols: list[str]) -> None:
 
 def main() -> None:
     # ----------------------------
-    # Load
+    # Load + column names
     # ----------------------------
     df = pd.read_csv(RAW_PATH)
-
-    # ----------------------------
-    # Column names
-    # ----------------------------
     df.columns = df.columns.str.strip()
 
     required_cols = [
-        "scraped_at", "product_id", "price_gbp",
-        "category", "name", "brand", "variant",
-        "unit_price_raw", "region", "promo_label",
-        "product_url", "image_url"
+        "scraped_at", "category", "product_id", "name", "brand", "variant",
+        "price_ex_vat_gbp", "unit_price_raw", "region", "promo_label", "status",
+        "product_url", "image_url",
+        "rating_stars", "review_count",
+        "price_inc_vat_gbp", "price_before_discount_gbp",
+        "style_body", "style_richness", "style_smoke", "style_sweetness",
+        "character_notes",
+        "fact_bottler", "fact_country", "fact_region", "fact_cask_type", "fact_colouring",
     ]
     _require_cols(df, required_cols)
 
@@ -56,12 +57,23 @@ def main() -> None:
         df = df.drop(columns=["status"])
 
     # ----------------------------
-    # Enforce schema (safe + consistent types)
+    # Enforce schema
     # ----------------------------
     df = df.assign(
         scraped_at=pd.to_datetime(df["scraped_at"], errors="coerce"),
         product_id=pd.to_numeric(df["product_id"], errors="coerce").astype("Int64"),
-        price_gbp=pd.to_numeric(df["price_gbp"], errors="coerce"),
+
+        price_ex_vat_gbp=pd.to_numeric(df["price_ex_vat_gbp"], errors="coerce"),
+        price_inc_vat_gbp=pd.to_numeric(df["price_inc_vat_gbp"], errors="coerce"),
+        price_before_discount_gbp=pd.to_numeric(df["price_before_discount_gbp"], errors="coerce"),
+
+        rating_stars=pd.to_numeric(df["rating_stars"], errors="coerce"),
+        review_count=pd.to_numeric(df["review_count"], errors="coerce").astype("Int64"),
+
+        style_body=pd.to_numeric(df["style_body"], errors="coerce").astype("Int64"),
+        style_richness=pd.to_numeric(df["style_richness"], errors="coerce").astype("Int64"),
+        style_smoke=pd.to_numeric(df["style_smoke"], errors="coerce").astype("Int64"),
+        style_sweetness=pd.to_numeric(df["style_sweetness"], errors="coerce").astype("Int64"),
 
         category=df["category"].astype("string"),
         name=df["name"].astype("string"),
@@ -72,42 +84,79 @@ def main() -> None:
         promo_label=df["promo_label"].astype("string"),
         product_url=df["product_url"].astype("string"),
         image_url=df["image_url"].astype("string"),
+
+        character_notes=df["character_notes"].astype("string"),
+        fact_bottler=df["fact_bottler"].astype("string"),
+        fact_country=df["fact_country"].astype("string"),
+        fact_region=df["fact_region"].astype("string"),
+        fact_cask_type=df["fact_cask_type"].astype("string"),
+        fact_colouring=df["fact_colouring"].astype("string"),
     )
 
     # ----------------------------
-    # Deduplicate (ignore scraped_at)
+    # Deduplicate
     # ----------------------------
     dedup_cols = [c for c in df.columns if c != "scraped_at"]
     df = df.drop_duplicates(subset=dedup_cols).reset_index(drop=True)
 
+    df = (
+        df.sort_values("scraped_at")
+          .drop_duplicates(subset=["product_id"], keep="last")
+          .reset_index(drop=True)
+    )
+
     # ----------------------------
-    # Standardize missing values in text columns
+    # Standardize missing values (text)
     # ----------------------------
-    text_cols = df.select_dtypes(include="string").columns
+    text_cols = [
+        c for c in df.select_dtypes(include="string").columns
+        if c not in {"product_url", "image_url"}
+    ]
     df[text_cols] = df[text_cols].apply(lambda s: s.str.strip())
 
     for col in text_cols:
-        lower = df[col].str.lower()
-        df[col] = df[col].where(~lower.isin(MISSING_TOKENS), pd.NA)
+        df[col] = df[col].where(~df[col].str.lower().isin(MISSING_TOKENS), pd.NA)
+
+    if "character_notes" in df.columns:
+        df["character_notes"] = (
+            df["character_notes"]
+            .str.replace(r"\s*\|\s*", "|", regex=True)
+            .str.strip("|")
+        )
 
     # ----------------------------
-    # Region cleaning
+    # Region cleaning (before consolidation)
     # ----------------------------
-    # Make region lowercase for logic
-    df["region"] = df["region"].astype("string").str.lower()
+    df["region"] = (
+        df["region"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .replace({"islands": "island", "the islands": "island"})
+    )
 
-    # Blended => region not applicable
     df.loc[df["category"].str.lower() == "blended", "region"] = pd.NA
 
-    # Single malt invalid region labels => NA
     df.loc[
         (df["category"].str.lower() == "single malt") &
         (~df["region"].isin(list(VALID_REGIONS))),
         "region"
     ] = pd.NA
 
-    # Presentation formatting
+    # ----------------------------
+    # Consolidate region with fact_region
+    # ----------------------------
+    df["fact_region"] = (
+        df["fact_region"]
+        .astype("string")
+        .str.strip()
+        .str.lower()
+        .replace({"islands": "island", "the islands": "island"})
+    )
+
+    df["region"] = df["region"].fillna(df["fact_region"])
     df["region"] = df["region"].str.capitalize()
+    df = df.drop(columns=["fact_region"])
 
     # ----------------------------
     # Brand standardization
@@ -115,50 +164,67 @@ def main() -> None:
     df["brand"] = (
         df["brand"]
         .astype("string")
-        .str.replace(r"\s+", " ", regex=True)
         .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
     )
 
     brand_key_tmp = df["brand"].str.lower()
     df["brand"] = brand_key_tmp.map(BRAND_REPLACEMENTS_CI).fillna(df["brand"])
-
     df["is_brand_placeholder"] = df["brand"].eq(PLACEHOLDER_BRAND)
 
     # ----------------------------
-    # Parse bottle size + ABV from variant
+    # VAT fallback: fill missing price_inc_vat_gbp from price_ex_vat_gbp
     # ----------------------------
-    df["bottle_size_cl"] = (
-        df["variant"]
-        .str.extract(r"(\d+(?:\.\d+)?)\s*cl", expand=False)
-        .astype(float)
-    )
+    missing_before = df["price_inc_vat_gbp"].isna().sum()
+    df["price_inc_vat_calc_gbp"] = (df["price_ex_vat_gbp"] * 1.2).round(2)
+    df["price_inc_vat_gbp"] = df["price_inc_vat_gbp"].fillna(df["price_inc_vat_calc_gbp"])
+    filled = missing_before - df["price_inc_vat_gbp"].isna().sum()
 
-    df["bottle_size_l"] = df["bottle_size_cl"] / 100
-
-    df["abv_percent"] = (
-        df["variant"]
-        .str.extract(r"(\d+(?:\.\d+)?)\s*%", expand=False)
-        .astype(float)
-    )
+    # Keep this calc column or drop it — your choice
+    df = df.drop(columns=["price_inc_vat_calc_gbp"])
 
     # ----------------------------
-    # Parse unit price to GBP per litre (site-reported)
+    # Parse bottle size + ABV from variant (ml/cl/l)
+    # ----------------------------
+    vol_amount = pd.to_numeric(
+        df["variant"].str.extract(r"(\d+(?:\.\d+)?)\s*(?:ml|cl|l|litre|liter)", expand=False),
+        errors="coerce"
+    )
+    vol_unit = df["variant"].str.extract(
+        r"(\d+(?:\.\d+)?)\s*(ml|cl|l|litre|liter)",
+        flags=re.IGNORECASE
+    )[1].str.lower()
+
+    df["bottle_size_l"] = pd.NA
+    df.loc[vol_unit == "ml", "bottle_size_l"] = vol_amount / 1000
+    df.loc[vol_unit == "cl", "bottle_size_l"] = vol_amount / 100
+    df.loc[vol_unit.isin(["l", "litre", "liter"]), "bottle_size_l"] = vol_amount
+    df["bottle_size_l"] = pd.to_numeric(df["bottle_size_l"], errors="coerce")
+    df["bottle_size_cl"] = (df["bottle_size_l"] * 100).round(2)
+
+    df["abv_percent"] = pd.to_numeric(
+        df["variant"].str.extract(r"(\d+(?:\.\d+)?)\s*%", expand=False),
+        errors="coerce"
+    )
+
+    # ----------------------------
+    # Parse unit price to GBP per litre
     # ----------------------------
     df["unit_price_gbp_per_litre"] = (
         df["unit_price_raw"]
-        .astype("string")
-        .str.replace("£", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.extract(r"(\d+(?:\.\d+)?)", expand=False)
+          .astype("string")
+          .str.replace("£", "", regex=False)
+          .str.replace(",", "", regex=False)
+          .str.extract(r"(\d+(?:\.\d+)?)", expand=False)
     )
     df["unit_price_gbp_per_litre"] = pd.to_numeric(df["unit_price_gbp_per_litre"], errors="coerce")
 
     basis = (
         df["unit_price_raw"]
-        .astype("string")
-        .str.lower()
-        .str.replace(",", "", regex=False)
-        .str.extract(r"(?:per|/)\s*([0-9]+(?:\.[0-9]+)?\s*)?(ml|cl|l|litre|liter)", expand=True)
+          .astype("string")
+          .str.lower()
+          .str.replace(",", "", regex=False)
+          .str.extract(r"(?:per|/)\s*([0-9]+(?:\.[0-9]+)?\s*)?(ml|cl|l|litre|liter)", expand=False)
     )
     qty = pd.to_numeric(basis[0].astype("string").str.strip(), errors="coerce")
     unit = basis[1].astype("string").replace({"liter": "litre"})
@@ -166,7 +232,7 @@ def main() -> None:
     mask_litre = ((unit == "litre") | (unit == "l")) & qty.isna()
     qty.loc[mask_litre] = 1.0
 
-    scale = pd.Series(np.nan, index=df.index, dtype="float64")
+    scale = pd.Series(1.0, index=df.index, dtype="float64")
 
     mask_ml = (unit == "ml") & qty.notna()
     scale.loc[mask_ml] = 1000 / qty.loc[mask_ml]
@@ -180,45 +246,27 @@ def main() -> None:
     df["unit_price_gbp_per_litre"] = (df["unit_price_gbp_per_litre"] * scale).round(2)
 
     # ----------------------------
-    # Discount extraction + pre-discount price reconstruction
+    # Feature engineering: prices + discounts
     # ----------------------------
-    df["discount_amount_gbp"] = (
-        df["promo_label"]
-        .astype("string")
-        .str.lower()
-        .str.replace(",", "", regex=False)
-        .str.extract(r"£\s*(\d+(?:\.\d+)?)", expand=False)
-    )
-    df["discount_amount_gbp"] = pd.to_numeric(df["discount_amount_gbp"], errors="coerce")
+    df["reference_price_gbp"] = df["price_before_discount_gbp"].fillna(df["price_inc_vat_gbp"])
 
-    df["is_discounted"] = df["discount_amount_gbp"].notna()
-
-    # Pre-discount (calculated) price
-    df["price_pre_discount_calc_gbp"] = df["price_gbp"] + df["discount_amount_gbp"].fillna(0)
-
-    # ----------------------------
-    # Feature engineering
-    # ----------------------------
-    df["true_price_gbp"] = df["price_pre_discount_calc_gbp"]
-
-    df["true_unit_price_per_l"] = (df["true_price_gbp"] / df["bottle_size_l"]).round(2)
-
-    # UK alcohol units: bottle_size_l * abv_percent (works because abv_percent is %)
     df["alcohol_units"] = df["bottle_size_l"] * df["abv_percent"]
-
-    df["true_price_per_alcohol_unit_gbp"] = (df["true_price_gbp"] / df["alcohol_units"]).round(2)
+    df["price_per_alcohol_unit_gbp"] = (df["reference_price_gbp"] / df["alcohol_units"]).round(2)
 
     df["price_tier"] = pd.cut(
-        df["true_price_gbp"],
+        df["reference_price_gbp"],
         bins=[0, 40, 120, float("inf")],
         labels=["Budget", "Premium", "Luxury"],
         right=False
     )
 
-    df["discount_percent"] = (
-        (df["true_price_gbp"] - df["price_gbp"]) / df["true_price_gbp"] * 100
-    ).round(2)
-    df.loc[df["discount_amount_gbp"].isna(), "discount_percent"] = 0
+    df["discount_amount_gbp"] = df["price_before_discount_gbp"] - df["price_inc_vat_gbp"]
+    df.loc[df["discount_amount_gbp"] <= 0, "discount_amount_gbp"] = pd.NA
+
+    df["is_discounted"] = df["discount_amount_gbp"].notna()
+
+    df["discount_percent"] = ((df["discount_amount_gbp"] / df["price_before_discount_gbp"]) * 100).round(2)
+    df.loc[~df["is_discounted"], "discount_percent"] = 0
 
     df["discount_band"] = pd.cut(
         df["discount_percent"],
@@ -226,11 +274,18 @@ def main() -> None:
         labels=["No Discount", "Low (≤10%)", "Medium (10–20%)", "High (20–40%)", "Very High (>40%)"]
     )
 
-    df["age_years"] = (
-        df["name"]
-        .str.extract(r"\b(\d{1,2})\s*(?:year|years|yo)\b", flags=re.IGNORECASE, expand=False)
-        .astype("float")
+    # ----------------------------
+    # Feature engineering: age/size/abv
+    # ----------------------------
+    df["age_years"] = pd.to_numeric(
+        df["name"].astype("string").str.extract(
+            r"\b(\d{1,2})\s*(?:year(?:s)?(?:\s+old)?|yo)\b",
+            flags=re.IGNORECASE,
+            expand=False
+        ),
+        errors="coerce"
     )
+
     df["is_age_stated"] = df["age_years"].notna()
 
     df["age_band"] = pd.cut(
@@ -242,7 +297,7 @@ def main() -> None:
     df["bottle_size_band"] = pd.cut(
         df["bottle_size_l"],
         bins=[0, 0.35, 0.7, 1.0, float("inf")],
-        labels=["Small (≤35cl)", "Standard (70cl)", "Large (1L)", "Extra Large (>1L)"]
+        labels=["Mini/Small (≤35cl)", "Half–Standard (35–70cl)", "Standard–Large (70cl–1L)", "Extra Large (>1L)"]
     )
 
     df["abv_band"] = pd.cut(
@@ -253,7 +308,9 @@ def main() -> None:
 
     df["is_cask_strength"] = df["abv_percent"] >= 50
 
-    # Optional: replace inf from divide-by-zero (if bottle_size_l missing)
+    # ----------------------------
+    # Safety: replace inf/-inf in numeric cols
+    # ----------------------------
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     df[numeric_cols] = df[numeric_cols].replace([np.inf, -np.inf], np.nan)
 
@@ -261,6 +318,12 @@ def main() -> None:
     # Save
     # ----------------------------
     df.to_csv(OUT_PATH, index=False)
+
+    # Lightweight terminal validation (minimal, useful)
+    print(f"Saved cleaned dataset: {OUT_PATH}")
+    print(f"Rows: {len(df)}")
+    print(f"Filled price_inc_vat_gbp using VAT fallback: {filled}")
+    print("Discounted products:", int(df["is_discounted"].sum()))
 
 
 if __name__ == "__main__":
