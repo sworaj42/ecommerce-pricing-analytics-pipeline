@@ -33,50 +33,57 @@ create or replace table DIM_DISCOUNT_BAND (
   constraint UK_DIM_DISCOUNT_BAND unique (DISCOUNT_BAND)
 );
 
--- Product dimension: stores stable product attributes (SCD Type 1 - latest values only)
-create or replace table DIM_PRODUCT (
-  PRODUCT_KEY number(38,0) autoincrement start 1 increment 1,  -- Surrogate key
-  PRODUCT_ID number(38,0) not null,                            -- Natural key from source
+-- Product dimension: stores stable product attributes 
+CREATE OR REPLACE TABLE DIM_PRODUCT (
+  PRODUCT_KEY NUMBER(38,0) AUTOINCREMENT START 1 INCREMENT 1,  -- Surrogate key
+  PRODUCT_ID NUMBER(38,0) NOT NULL,                            -- Natural key from source
 
   -- Basic product info
-  NAME varchar not null,
-  BRAND varchar,
-  CATEGORY varchar,
-  REGION varchar,
-  PRODUCT_URL varchar,
-  IMAGE_URL varchar,
+  NAME VARCHAR NOT NULL,
+  BRAND VARCHAR,
+  CATEGORY VARCHAR,
+  REGION VARCHAR,
+  PRODUCT_URL VARCHAR,
+  IMAGE_URL VARCHAR,
 
   -- Flavor profile (stable attributes)
-  STYLE_BODY number(2,0),
-  STYLE_RICHNESS number(2,0),
-  STYLE_SMOKE number(2,0),
-  STYLE_SWEETNESS number(2,0),
-  CHARACTER_NOTES varchar,
+  STYLE_BODY NUMBER(2,0),
+  STYLE_RICHNESS NUMBER(2,0),
+  STYLE_SMOKE NUMBER(2,0),
+  STYLE_SWEETNESS NUMBER(2,0),
+  CHARACTER_NOTES VARCHAR,
 
   -- Production details
-  FACT_BOTTLER varchar,
-  FACT_COUNTRY varchar,
-  FACT_CASK_TYPE varchar,
-  FACT_COLOURING varchar,
+  FACT_BOTTLER VARCHAR,
+  FACT_COUNTRY VARCHAR,
+  FACT_CASK_TYPE VARCHAR,
+  FACT_COLOURING VARCHAR,
 
   -- Bottle specifications
-  BOTTLE_SIZE_L number(10,3),
-  BOTTLE_SIZE_CL number(10,1),
-  BOTTLE_SIZE_BAND varchar,
+  BOTTLE_SIZE_L NUMBER(10,3),
+  BOTTLE_SIZE_CL NUMBER(10,1),
+  BOTTLE_SIZE_BAND VARCHAR,
+  IS_STANDARD_BOTTLE BOOLEAN,        
+  IS_COMPARABLE_BOTTLE BOOLEAN,      
 
   -- Alcohol content
-  ABV_PERCENT number(5,2),
-  ABV_BAND varchar,
-  IS_CASK_STRENGTH boolean,
+  ABV_PERCENT NUMBER(5,2),
+  ABV_BAND VARCHAR,
+  IS_CASK_STRENGTH BOOLEAN,
 
   -- Age information
-  AGE_YEARS number(5,0),
-  IS_AGE_STATED boolean,
-  AGE_BAND varchar,
+  AGE_YEARS NUMBER(5,0),
+  IS_AGE_STATED BOOLEAN,
+  AGE_BAND VARCHAR,
 
   -- Metadata
-  IS_BRAND_PLACEHOLDER boolean,
+  IS_BRAND_PLACEHOLDER BOOLEAN,
 
-  constraint PK_DIM_PRODUCT primary key (PRODUCT_KEY),
-  constraint UK_DIM_PRODUCT_PRODUCT_ID unique (PRODUCT_ID)
+  -- Outlier flags (added during cleaning; advisory only)
+  IS_PRICE_OUTLIER BOOLEAN,
+  IS_VALUE_OUTLIER BOOLEAN,
+  IS_OUTLIER BOOLEAN,
+
+  CONSTRAINT PK_DIM_PRODUCT PRIMARY KEY (PRODUCT_KEY),
+  CONSTRAINT UK_DIM_PRODUCT_PRODUCT_ID UNIQUE (PRODUCT_ID)
 );

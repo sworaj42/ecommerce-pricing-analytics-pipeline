@@ -1,0 +1,185 @@
+-- 02_fact_table.sql (UPDATED)
+-- Creates the snapshot fact table and loads dimensions + fact from RAW
+
+USE WAREHOUSE WH_WHISKY;
+USE DATABASE WHISKY_DWH;
+USE SCHEMA CURATED;
+
+-- 1) FACT TABLE: captures time-varying metrics per product per scrape date
+CREATE OR REPLACE TABLE FACT_PRODUCT_SNAPSHOT (
+  SNAPSHOT_KEY NUMBER(38,0) AUTOINCREMENT START 1 INCREMENT 1,
+
+  -- Foreign keys to dimensions
+  DATE_KEY NUMBER(8,0) NOT NULL,
+  PRODUCT_KEY NUMBER(38,0) NOT NULL,
+  PRICE_TIER_KEY NUMBER(38,0),
+  DISCOUNT_BAND_KEY NUMBER(38,0),
+
+  -- Price metrics
+  PRICE_EX_VAT_GBP NUMBER(10,2),
+  PRICE_INC_VAT_GBP NUMBER(10,2),
+  PRICE_BEFORE_DISCOUNT_GBP NUMBER(10,2),
+
+  -- Unit pricing
+  UNIT_PRICE_GBP_PER_LITRE NUMBER(10,2),
+  REFERENCE_PRICE_GBP NUMBER(10,2),
+
+  -- Alcohol metrics
+  ALCOHOL_UNITS NUMBER(10,2),
+  PRICE_PER_ALCOHOL_UNIT_GBP NUMBER(10,4),
+
+  -- Discount metrics
+  DISCOUNT_AMOUNT_GBP NUMBER(10,2),
+  IS_DISCOUNTED BOOLEAN,
+  DISCOUNT_PERCENT NUMBER(6,2),
+
+  -- Customer feedback
+  RATING_STARS NUMBER(4,2),
+  REVIEW_COUNT NUMBER(10,0),
+
+  CONSTRAINT PK_FACT_PRODUCT_SNAPSHOT PRIMARY KEY (SNAPSHOT_KEY),
+  CONSTRAINT FK_FACT_DATE FOREIGN KEY (DATE_KEY) REFERENCES DIM_DATE(DATE_KEY),
+  CONSTRAINT FK_FACT_PRODUCT FOREIGN KEY (PRODUCT_KEY) REFERENCES DIM_PRODUCT(PRODUCT_KEY),
+  CONSTRAINT FK_FACT_PRICE_TIER FOREIGN KEY (PRICE_TIER_KEY) REFERENCES DIM_PRICE_TIER(PRICE_TIER_KEY),
+  CONSTRAINT FK_FACT_DISCOUNT_BAND FOREIGN KEY (DISCOUNT_BAND_KEY) REFERENCES DIM_DISCOUNT_BAND(DISCOUNT_BAND_KEY)
+);
+
+
+-- 2) RELOAD STRATEGY (DEV): truncate dims + fact to allow safe reruns
+TRUNCATE TABLE DIM_DATE;
+TRUNCATE TABLE DIM_PRICE_TIER;
+TRUNCATE TABLE DIM_DISCOUNT_BAND;
+TRUNCATE TABLE DIM_PRODUCT;
+TRUNCATE TABLE FACT_PRODUCT_SNAPSHOT;
+
+-- 3) LOAD DIM_DATE: one row per scrape date
+INSERT INTO DIM_DATE (DATE_KEY, FULL_DATE, YEAR, MONTH, DAY, WEEK, DAY_NAME)
+SELECT DISTINCT
+  TO_NUMBER(TO_CHAR(TO_DATE(ts), 'YYYYMMDD')) AS DATE_KEY,
+  TO_DATE(ts) AS FULL_DATE,
+  YEAR(TO_DATE(ts)) AS YEAR,
+  MONTH(TO_DATE(ts)) AS MONTH,
+  DAY(TO_DATE(ts)) AS DAY,
+  WEEK(TO_DATE(ts)) AS WEEK,
+  DAYNAME(TO_DATE(ts)) AS DAY_NAME
+FROM (
+  SELECT TRY_TO_TIMESTAMP_NTZ(scraped_at) AS ts
+  FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
+)
+WHERE ts IS NOT NULL;
+
+
+-- 4) LOAD DIM_PRICE_TIER: lookup dimension
+INSERT INTO DIM_PRICE_TIER (PRICE_TIER)
+SELECT DISTINCT price_tier
+FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
+WHERE price_tier IS NOT NULL;
+
+-- 5) LOAD DIM_DISCOUNT_BAND: lookup dimension
+INSERT INTO DIM_DISCOUNT_BAND (DISCOUNT_BAND)
+SELECT DISTINCT discount_band
+FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
+WHERE discount_band IS NOT NULL;
+
+
+-- 6) LOAD DIM_PRODUCT: latest record per product_id (SCD Type 1)
+INSERT INTO DIM_PRODUCT (
+  PRODUCT_ID, NAME, BRAND, CATEGORY, REGION, PRODUCT_URL, IMAGE_URL,
+  STYLE_BODY, STYLE_RICHNESS, STYLE_SMOKE, STYLE_SWEETNESS, CHARACTER_NOTES,
+  FACT_BOTTLER, FACT_COUNTRY, FACT_CASK_TYPE, FACT_COLOURING,
+  BOTTLE_SIZE_L, BOTTLE_SIZE_CL, BOTTLE_SIZE_BAND,
+  IS_STANDARD_BOTTLE, IS_COMPARABLE_BOTTLE,
+  ABV_PERCENT, ABV_BAND, IS_CASK_STRENGTH,
+  AGE_YEARS, IS_AGE_STATED, AGE_BAND,
+  IS_BRAND_PLACEHOLDER
+)
+SELECT
+  TRY_TO_NUMBER(product_id) AS PRODUCT_ID,
+  name, brand, category, region, product_url, image_url,
+
+  TRY_CAST(style_body AS NUMBER(2,0)),
+  TRY_CAST(style_richness AS NUMBER(2,0)),
+  TRY_CAST(style_smoke AS NUMBER(2,0)),
+  TRY_CAST(style_sweetness AS NUMBER(2,0)),
+  character_notes,
+
+  fact_bottler, fact_country, fact_cask_type, fact_colouring,
+
+  TRY_CAST(bottle_size_l AS NUMBER(10,3)),
+  TRY_CAST(bottle_size_cl AS NUMBER(10,1)),
+  bottle_size_band,
+
+  IFF(LOWER(is_standard_bottle) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_standard_bottle) IN ('false','f','0','no','n'), FALSE, NULL)),
+  IFF(LOWER(is_comparable_bottle) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_comparable_bottle) IN ('false','f','0','no','n'), FALSE, NULL)),
+
+  TRY_CAST(abv_percent AS NUMBER(5,2)),
+  abv_band,
+  IFF(LOWER(is_cask_strength) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_cask_strength) IN ('false','f','0','no','n'), FALSE, NULL)),
+
+  TRY_CAST(age_years AS NUMBER(5,0)),
+  IFF(LOWER(is_age_stated) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_age_stated) IN ('false','f','0','no','n'), FALSE, NULL)),
+  age_band,
+
+  IFF(LOWER(is_brand_placeholder) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_brand_placeholder) IN ('false','f','0','no','n'), FALSE, NULL))
+FROM (
+  SELECT *
+  FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY product_id
+    ORDER BY TRY_TO_TIMESTAMP_NTZ(scraped_at) DESC NULLS LAST
+  ) = 1
+)
+WHERE TRY_TO_NUMBER(product_id) IS NOT NULL;
+
+
+
+-- 7) LOAD FACT_PRODUCT_SNAPSHOT: all scrape records with FK lookups
+INSERT INTO FACT_PRODUCT_SNAPSHOT (
+  DATE_KEY, PRODUCT_KEY, PRICE_TIER_KEY, DISCOUNT_BAND_KEY,
+  PRICE_EX_VAT_GBP, PRICE_INC_VAT_GBP, PRICE_BEFORE_DISCOUNT_GBP,
+  UNIT_PRICE_GBP_PER_LITRE, REFERENCE_PRICE_GBP,
+  ALCOHOL_UNITS, PRICE_PER_ALCOHOL_UNIT_GBP,
+  DISCOUNT_AMOUNT_GBP, IS_DISCOUNTED, DISCOUNT_PERCENT,
+  RATING_STARS, REVIEW_COUNT
+)
+SELECT
+  TO_NUMBER(TO_CHAR(TO_DATE(ts), 'YYYYMMDD')) AS DATE_KEY,
+  p.PRODUCT_KEY,
+  pt.PRICE_TIER_KEY,
+  db.DISCOUNT_BAND_KEY,
+
+  TRY_CAST(r.price_ex_vat_gbp AS NUMBER(10,2)),
+  TRY_CAST(r.price_inc_vat_gbp AS NUMBER(10,2)),
+  TRY_CAST(r.price_before_discount_gbp AS NUMBER(10,2)),
+
+  TRY_CAST(r.unit_price_gbp_per_litre AS NUMBER(10,2)),
+  TRY_CAST(r.reference_price_gbp AS NUMBER(10,2)),
+
+  TRY_CAST(r.alcohol_units AS NUMBER(10,2)),
+  TRY_CAST(r.price_per_alcohol_unit_gbp AS NUMBER(10,4)),
+
+  TRY_CAST(r.discount_amount_gbp AS NUMBER(10,2)),
+  IFF(LOWER(r.is_discounted) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(r.is_discounted) IN ('false','f','0','no','n'), FALSE, NULL)),
+  TRY_CAST(r.discount_percent AS NUMBER(6,2)),
+
+  TRY_CAST(r.rating_stars AS NUMBER(4,2)),
+  TRY_CAST(r.review_count AS NUMBER(10,0))
+FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW r
+JOIN DIM_PRODUCT p
+  ON p.PRODUCT_ID = TRY_TO_NUMBER(r.product_id)
+LEFT JOIN DIM_PRICE_TIER pt
+  ON pt.PRICE_TIER = r.price_tier
+LEFT JOIN DIM_DISCOUNT_BAND db
+  ON db.DISCOUNT_BAND = r.discount_band
+CROSS JOIN LATERAL (
+  SELECT TRY_TO_TIMESTAMP_NTZ(r.scraped_at) AS ts
+)
+WHERE ts IS NOT NULL
+  AND TRY_TO_NUMBER(r.product_id) IS NOT NULL;
+
