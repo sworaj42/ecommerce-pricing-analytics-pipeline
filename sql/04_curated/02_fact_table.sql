@@ -44,7 +44,6 @@ CREATE OR REPLACE TABLE FACT_PRODUCT_SNAPSHOT (
   CONSTRAINT FK_FACT_DISCOUNT_BAND FOREIGN KEY (DISCOUNT_BAND_KEY) REFERENCES DIM_DISCOUNT_BAND(DISCOUNT_BAND_KEY)
 );
 
-
 -- 2) RELOAD STRATEGY (DEV): truncate dims + fact to allow safe reruns
 TRUNCATE TABLE DIM_DATE;
 TRUNCATE TABLE DIM_PRICE_TIER;
@@ -68,7 +67,6 @@ FROM (
 )
 WHERE ts IS NOT NULL;
 
-
 -- 4) LOAD DIM_PRICE_TIER: lookup dimension
 INSERT INTO DIM_PRICE_TIER (PRICE_TIER)
 SELECT DISTINCT price_tier
@@ -81,8 +79,9 @@ SELECT DISTINCT discount_band
 FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
 WHERE discount_band IS NOT NULL;
 
-
+--------------------------------------------------------------------------------
 -- 6) LOAD DIM_PRODUCT: latest record per product_id (SCD Type 1)
+--------------------------------------------------------------------------------
 INSERT INTO DIM_PRODUCT (
   PRODUCT_ID, NAME, BRAND, CATEGORY, REGION, PRODUCT_URL, IMAGE_URL,
   STYLE_BODY, STYLE_RICHNESS, STYLE_SMOKE, STYLE_SWEETNESS, CHARACTER_NOTES,
@@ -91,7 +90,10 @@ INSERT INTO DIM_PRODUCT (
   IS_STANDARD_BOTTLE, IS_COMPARABLE_BOTTLE,
   ABV_PERCENT, ABV_BAND, IS_CASK_STRENGTH,
   AGE_YEARS, IS_AGE_STATED, AGE_BAND,
-  IS_BRAND_PLACEHOLDER
+  IS_BRAND_PLACEHOLDER,
+
+  -- ✅ added
+  IS_PRICE_OUTLIER, IS_VALUE_OUTLIER, IS_OUTLIER
 )
 SELECT
   TRY_TO_NUMBER(product_id) AS PRODUCT_ID,
@@ -125,7 +127,14 @@ SELECT
   age_band,
 
   IFF(LOWER(is_brand_placeholder) IN ('true','t','1','yes','y'), TRUE,
-      IFF(LOWER(is_brand_placeholder) IN ('false','f','0','no','n'), FALSE, NULL))
+      IFF(LOWER(is_brand_placeholder) IN ('false','f','0','no','n'), FALSE, NULL)),
+
+  IFF(LOWER(is_price_outlier) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_price_outlier) IN ('false','f','0','no','n'), FALSE, NULL)),
+  IFF(LOWER(is_value_outlier) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_value_outlier) IN ('false','f','0','no','n'), FALSE, NULL)),
+  IFF(LOWER(is_outlier) IN ('true','t','1','yes','y'), TRUE,
+      IFF(LOWER(is_outlier) IN ('false','f','0','no','n'), FALSE, NULL))
 FROM (
   SELECT *
   FROM WHISKY_DWH.RAW.WHISKY_PRODUCTS_RAW
@@ -135,8 +144,6 @@ FROM (
   ) = 1
 )
 WHERE TRY_TO_NUMBER(product_id) IS NOT NULL;
-
-
 
 -- 7) LOAD FACT_PRODUCT_SNAPSHOT: all scrape records with FK lookups
 INSERT INTO FACT_PRODUCT_SNAPSHOT (
@@ -182,4 +189,3 @@ CROSS JOIN LATERAL (
 )
 WHERE ts IS NOT NULL
   AND TRY_TO_NUMBER(r.product_id) IS NOT NULL;
-
