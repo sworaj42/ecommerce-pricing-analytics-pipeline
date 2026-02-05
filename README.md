@@ -10,6 +10,27 @@ The analysis focuses on:
 - Discount and value-for-money analysis
 
 ---
+## Tech Stack
+
+- Data Collection: Python (web scraping)
+- Data Processing: Python
+- Data Warehouse: Snowflake
+- Data Modeling: Star schema (DIM_* + snapshot fact table)
+- Analytics Layer: Snowflake Views
+- Visualization: Power BI
+- Version Control: Git & GitHub
+
+---
+
+## Repository Structure
+
+- `src/` – Python scripts for web scraping and data transformation  
+- `sql/` – Snowflake DDL, fact/dimension tables, and curated views  
+- `outputs/figures/` – Architecture and data model diagrams  
+- `powerbi/` – Power BI dashboard file  
+- `ANALYTICS_QUERIES.md` – Documented analytical queries and business logic  
+
+---
 
 ## Architecture Overview
 
@@ -20,18 +41,6 @@ The analysis focuses on:
 **Diagram Explanation**
 
 The pipeline begins by scraping whisky product data from The Whisky Exchange website using Python. The scraped data is first saved as a raw CSV, then cleaned and enriched in Python to derive pricing, alcohol, discount, and categorization metrics. The cleaned CSV is loaded into Snowflake using a Stage and `COPY INTO`, landing in the RAW schema. From there, the data is transformed into a curated star schema where **DIM_\*** tables store descriptive product, date, price tier, and discount attributes, while **FACT_PRODUCT_SNAPSHOT** captures time-varying pricing, discount, and rating metrics per product per scrape date. Finally, analytical views are created in Snowflake and consumed by Power BI to power interactive dashboards.
-
----
-
-## Tech Stack
-
-- Data Collection: Python (web scraping)
-- Data Processing: Python
-- Data Warehouse: Snowflake
-- Data Modeling: Star schema (DIM_* + snapshot fact table)
-- Analytics Layer: Snowflake Views
-- Visualization: Power BI
-- Version Control: Git & GitHub
 
 ---
 
