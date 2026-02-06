@@ -21,11 +21,11 @@ How do brands differ in terms of pricing, product spread, customer ratings, and 
 `VW_PRODUCT_LATEST`
 
 **Analytical Interpretation**  
-- Premium brands tend to cluster at higher median prices while maintaining strong consumer ratings, suggesting that higher pricing does not negatively impact perceived quality.
-- Brands with wider price spreads often operate across multiple product tiers, indicating diversified portfolios rather than a single price positioning.
-- Weighted consumer ratings remain consistently high across most brands, implying generally strong customer satisfaction within the category.
-- Discount activity varies significantly by brand, with some maintaining full-price strategies while others actively use promotions to drive volume.
-- The combination of pricing, spread, and discount behavior highlights distinct brand strategies ranging from exclusivity-focused to promotion-driven positioning.
+- Macallan and Balvenie emerge as the strongest premium brands, combining the highest median prices with consistently high weighted consumer ratings (≈4.4–4.6), indicating strong brand equity and customer trust at higher price points.
+- Glenfiddich and Johnnie Walker show the widest price spreads, suggesting broad portfolios that span both entry-level and premium offerings rather than a single pricing tier.
+- Brands such as Aberlour, Glenfarclas, and Bunnahabhain achieve high consumer ratings while maintaining mid-range pricing, indicating strong value-for-money positioning.
+- Discount activity is uneven across brands: some premium brands maintain a near zero on-sale rate, reinforcing exclusivity, while others (e.g., Johnnie Walker, Balvenie) use selective promotions to drive volume.
+- Overall, higher pricing does not correlate negatively with customer ratings, suggesting that perceived quality and brand reputation outweigh price sensitivity in this category.
 
 **Suggested Screenshot**  
 
