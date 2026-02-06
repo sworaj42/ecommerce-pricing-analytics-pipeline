@@ -28,6 +28,7 @@ How do brands differ in terms of pricing, product spread, customer ratings, and 
 - The combination of pricing, spread, and discount behavior highlights distinct brand strategies ranging from exclusivity-focused to promotion-driven positioning.
 
 **Suggested Screenshot**  
-`outputs/screenshots/q1_brand_price_quality_positioning.png`
+
+![Q1 – Brand Price & Quality Positioning](outputs/screenshots/q1_brand_price_quality_positioning.png)
 
 ---
