@@ -32,3 +32,29 @@ How do brands differ in terms of pricing, product spread, customer ratings, and 
 ![Q1 – Brand Price & Quality Positioning](outputs/screenshots/q1_brand_price_quality_positioning.png)
 
 ---
+
+### Q2. Region-Level Pricing, Quality & Promotion (Single Malt)
+
+**Business Question**  
+Which whisky regions are priced higher, which regions deliver the strongest customer ratings, and where are promotions most common (within comparable Single Malt bottles)?
+
+**Query Reference**  
+`analytics_queries.sql` → Query 2 (Region-Level Pricing, Quality, and Promotion)
+
+**Source View**  
+`VW_PRODUCT_LATEST`
+
+**Analytical Interpretation**  
+- **Speyside** dominates the category with the largest SKU count and the highest average pricing, indicating both scale and strong premium positioning.
+- **Islay** achieves the strongest weighted consumer ratings, suggesting particularly high perceived quality and brand loyalty despite premium pricing.
+- **Highland** balances scale and value, offering a large number of SKUs at slightly lower prices while maintaining strong customer satisfaction.
+- **Lowland**, with the smallest SKU base, shows the highest discount intensity, likely reflecting weaker pricing power or inventory-clearing strategies.
+- Overall, regional identity plays a clear role in both pricing and consumer perception, with premium regions sustaining higher prices without sacrificing ratings.
+
+**Suggested Screenshot**
+
+![Q2 – Region Pricing and Price Spread](outputs/screenshots/q2_region_pricing_quality_promo_part1.png)
+
+![Q2 – Region Ratings, Reviews and Discount Activity](outputs/screenshots/q2_region_pricing_quality_promo_part2.png)
+
+---
