@@ -51,3 +51,23 @@ The curated data warehouse follows a star schema design. Dimension tables store 
 ![Star Schema Data Model](outputs/figures/data_model_star_schema.png)
 
 ---
+
+## Business Questions Answered
+
+This project answers key pricing and value questions such as:
+- Which whisky brands justify premium pricing through ratings and reputation?
+- Which regions command higher prices without sacrificing customer satisfaction?
+- Which products deliver the strongest value-for-money?
+- How effective are current discount strategies?
+- At what age does whisky aging show diminishing returns on price?
+
+---
+
+## Key Insights
+
+- Premium pricing is driven primarily by age, cask strength, and brand reputation
+- Mid-priced blended whiskies dominate value-for-money rankings
+- Discounting is used selectively; deep discounts are rare
+- Aging beyond ~18 years shows clear diminishing returns on value
+
+---
