@@ -24,13 +24,13 @@ Each section below presents the relevant dashboard screenshots followed by struc
 
 ---
 
-## **Business Objective**
+## Business Objective
 
 To evaluate overall market structure by analyzing price distribution, engagement concentration, rating dispersion, and tier segmentation across whisky categories.
 
 ---
 
-## **Visual Evidence**
+## Visual Evidence
 
 ![Market Overview - All](outputs/screenshots/powerbi_dashboard/p1_market_overview_all.png)
 
@@ -40,7 +40,7 @@ To evaluate overall market structure by analyzing price distribution, engagement
 
 ---
 
-## **Analytical Interpretation**
+## Analytical Interpretation
 
 - The price distribution is positively skewed, with the majority of products priced below £150, indicating structural mid-tier concentration.
 - Average ratings remain tightly clustered (≈4.3–4.5) across all price levels, suggesting limited quality dispersion.
@@ -50,7 +50,7 @@ To evaluate overall market structure by analyzing price distribution, engagement
 
 ---
 
-## **Strategic Implication**
+## Strategic Implication
 
 - Portfolio expansion should prioritize Premium pricing bands where engagement density is highest.
 - Luxury positioning requires stronger differentiation beyond price signaling.
