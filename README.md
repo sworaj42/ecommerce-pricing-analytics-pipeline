@@ -30,29 +30,28 @@ The analysis focuses on:
 
 ## Repository Structure
 
+```text
 ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │
 ├── data/                        # Raw and intermediate datasets
-│
 ├── docs/                        # Project documentation
-│
 ├── notebooks/                   # Exploratory analysis & experimentation
 │
 ├── outputs/
 │   ├── figures/                 # Architecture & star schema diagrams
 │   ├── screenshots/
 │   │   └── powerbi_dashboard/   # Dashboard page screenshots
-│   └── tables/                  # Exported summary tables (if applicable)
+│   └── tables/                  # Exported summary tables
 │
 ├── powerbi/
 │   └── whisky_dashboard.pbix    # Final Power BI dashboard file
 │
 ├── sql/
-│   ├── 01_setup/                # Database & schema setup scripts
-│   ├── 02_stage/                # Stage layer (file ingestion)
+│   ├── 01_setup/                # Database & schema setup
+│   ├── 02_stage/                # Stage layer
 │   ├── 03_raw/                  # RAW landing tables
 │   ├── 04_curated/              # Star schema (DIM_* + FACT_PRODUCT_SNAPSHOT)
-│   └── 05_analytics/            # Analytical views (VW_PRODUCT_LATEST, etc.)
+│   └── 05_analytics/            # Analytical views (VW_PRODUCT_LATEST)
 │
 ├── src/
 │   ├── scraping/                # Web scraping logic
@@ -60,10 +59,11 @@ ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │   ├── utils/                   # Helper functions
 │   └── __init__.py
 │
-├── ANALYTICS_QUERIES.md         # SQL queries and derived insights
-├── POWERBI_VISUALS_ANALYSIS.md  # Dashboard page-by-page documentation
-├── requirements.txt             # Python dependencies
-└── README.md                    # Project overview
+├── ANALYTICS_QUERIES.md
+├── POWERBI_VISUALS_ANALYSIS.md
+├── requirements.txt
+└── README.md
+```
 
 ---
 
