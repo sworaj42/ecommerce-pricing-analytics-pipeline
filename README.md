@@ -59,10 +59,10 @@ ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │   ├── utils/                   # Helper functions
 │   └── __init__.py
 │
-├── ANALYTICS_QUERIES.md
-├── POWERBI_VISUALS_ANALYSIS.md
-├── requirements.txt
-└── README.md
+├── ANALYTICS_QUERIES.md         # SQL queries + derived insights
+├── POWERBI_VISUALS_ANALYSIS.md  # Dashboard page-by-page documentation
+├── requirements.txt             # Python dependencies
+└── README.md                    # Project overview
 ```
 
 ---
