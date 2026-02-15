@@ -108,22 +108,35 @@ The curated data warehouse follows a star schema design. Dimension tables store 
 
 ---
 
-## Business Questions Answered
+## Business Questions Addressed
 
-This project answers key pricing and value questions such as:
-- Which whisky brands justify premium pricing through ratings and reputation?
-- Which regions command higher prices without sacrificing customer satisfaction?
-- Which products deliver the strongest value-for-money?
-- How effective are current discount strategies?
-- At what age does whisky aging show diminishing returns on price?
+This project investigates strategic pricing and value dynamics within the whisky market, addressing questions such as:
+
+- How do brands justify premium pricing through ratings, age, strength, and reputation?
+- Which regions sustain higher price intensity without sacrificing customer satisfaction?
+- Where does value-for-money peak across Budget, Premium, and Luxury tiers?
+- How effective are current discount strategies in driving review engagement?
+- At what age bands do diminishing returns begin to emerge in whisky pricing?
+- Which price ranges generate the highest review engagement and revenue potential?
 
 ---
 
-## Key Insights
+## Key Analytical Findings
 
-- Premium pricing is driven primarily by age, cask strength, and brand reputation
-- Mid-priced blended whiskies dominate value-for-money rankings
-- Discounting is used selectively; deep discounts are rare
-- Aging beyond ~18 years shows clear diminishing returns on value
+- Premium pricing is driven primarily by age tier, cask strength, and brand equity rather than ratings alone.
+- Mid-tier pricing bands (£50–£150) show the strongest intersection of engagement density and revenue scalability.
+- Budget blended whiskies dominate value-for-money rankings due to efficient pricing and strong review support.
+- Discounting is applied selectively, with moderate (10–20%) reductions generating stronger engagement than deep cuts.
+- Aging beyond the mid-teens (≈18 years) demonstrates diminishing marginal value relative to price increases.
+- Luxury positioning relies more on scarcity and prestige signaling than on incremental quality improvements.
+
+---
+
+## Strategic Implications
+
+- Competitive advantage is strongest in the mid-to-premium segment where pricing power and engagement align.
+- Luxury expansion should emphasize brand differentiation and scarcity rather than aggressive pricing.
+- Discount strategies should prioritize controlled, moderate reductions to protect brand equity.
+- Pricing strategy should be continuously monitored using elasticity indicators to optimize revenue efficiency.
 
 ---
