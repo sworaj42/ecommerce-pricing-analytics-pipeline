@@ -35,7 +35,7 @@ ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │
 ├── data/                        # Raw and intermediate datasets
 ├── docs/                        # Project documentation
-├── notebooks/                   # Exploratory analysis & cleaning
+├── notebooks/                   # Exploratory analysis cleaning & feature engineering
 │
 ├── outputs/
 │   ├── figures/                 # Architecture & star schema diagrams
