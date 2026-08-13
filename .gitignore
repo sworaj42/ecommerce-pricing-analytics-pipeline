@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -12,10 +14,13 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Outputs
-outputs/
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
 
 # Data (never commit)
 data/raw/
 data/processed/
 *.csv
+

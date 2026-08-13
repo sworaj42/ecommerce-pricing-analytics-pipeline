@@ -1,7 +1,5 @@
 beautifulsoup4
-curl-cffi
+seleniumbase
 lxml
 pandas
 numpy
-python-dateutil
-matplotlib

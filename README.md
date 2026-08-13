@@ -33,9 +33,10 @@ The analysis focuses on:
 ```text
 ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │
-├── data/                        # Raw and intermediate datasets
-├── docs/                        # Project documentation
-├── notebooks/                   # Exploratory analysis cleaning & feature engineering
+├── data/                        # Raw and intermediate datasets (gitignored)
+│   ├── raw/                     # Scraped product snapshots
+│   └── processed/               # Cleaned, feature-engineered snapshots
+├── notebooks/                   # Exploratory analysis, cleaning & feature engineering
 │
 ├── outputs/
 │   ├── figures/                 # Architecture & star schema diagrams
@@ -54,16 +55,44 @@ ECOMMERCE-PRICING-ANALYTICS-PIPELINE/
 │   └── 05_analytics/            # Analytical views (VW_PRODUCT_LATEST)
 │
 ├── src/
+│   ├── run_pipeline.py          # Orchestrator: scrape -> clean
 │   ├── scraping/                # Web scraping logic
-│   ├── cleaning/                # Data transformation & enrichment
-│   ├── utils/                   # Helper functions
-│   └── __init__.py
+│   ├── cleaning/                # Data transformation & feature engineering
+│   └── utils/                   # Shared path & logging helpers
+│
+├── tests/                       # Unit tests for the cleaning pipeline
 │
 ├── ANALYTICS_QUERIES.md         # SQL queries + derived insights
 ├── POWERBI_VISUALS_ANALYSIS.md  # Dashboard page-by-page documentation
-├── requirements.txt             # Python dependencies
+├── pyproject.toml               # Lint (ruff) & test (pytest) configuration
+├── requirements.txt             # Runtime Python dependencies
+├── requirements-dev.txt         # + test/lint tooling
 └── README.md                    # Project overview
 ```
+
+---
+
+## Getting Started
+
+```bash
+# 1. Install dependencies
+pip install -r requirements-dev.txt
+
+# 2. Run the full pipeline (scrape -> clean)
+python src/run_pipeline.py
+
+# ...or run each stage independently
+python src/scraping/scrape_whisky_exchange.py --headless
+python src/cleaning/clean_whisky_data.py
+
+# 3. Run the test suite
+pytest
+```
+
+The scraper writes a dated snapshot to `data/raw/whisky_raw_<date>.csv`; the
+cleaner picks up the most recent raw snapshot by default and writes the
+matching `data/processed/whisky_cleaned_<date>.csv`. Both accept explicit
+`--input`/`--output` paths — see `--help` on each script.
 
 ---
 

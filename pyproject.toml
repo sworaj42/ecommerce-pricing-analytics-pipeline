@@ -1,0 +1,15 @@
+[project]
+name = "ecommerce-pricing-analytics-pipeline"
+version = "1.0.0"
+description = "End-to-end pricing analytics pipeline for whisky e-commerce data"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 135
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,13 +1,45 @@
+"""
+Whisky Pricing Data Cleaner
+============================
+Transforms a raw scraped product CSV into an analytics-ready dataset:
+schema enforcement, deduplication, missing-value standardization,
+region/brand normalization, and derived pricing/age/size feature
+engineering (price tier, discount band, age band, value metrics).
+
+Usage:
+  python clean_whisky_data.py                                  # latest raw CSV -> data/processed/
+  python clean_whisky_data.py --input path/to/raw.csv           # explicit input
+  python clean_whisky_data.py --input in.csv --output out.csv   # explicit input + output
+"""
+
+import argparse
 import re
+import sys
+from datetime import date
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-# ----------------------------
-# Config
-# ----------------------------
-RAW_PATH = "../data/raw/whisky_raw.csv"
-OUT_PATH = "../data/processed/whisky_cleaned.csv"
+from src.utils.logging_utils import get_logger
+from src.utils.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR, ensure_dir, latest_file
+
+logger = get_logger(__name__)
+
+
+# ─── Config ──────────────────────────────────────────────────
+REQUIRED_COLUMNS = [
+    "scraped_at", "category", "product_id", "name", "brand", "variant",
+    "price_ex_vat_gbp", "unit_price_raw", "region", "promo_label", "status",
+    "product_url", "image_url",
+    "rating_stars", "review_count",
+    "price_inc_vat_gbp", "price_before_discount_gbp",
+    "style_body", "style_richness", "style_smoke", "style_sweetness",
+    "character_notes",
+    "fact_bottler", "fact_country", "fact_region", "fact_cask_type", "fact_colouring",
+]
 
 MISSING_TOKENS = {"", "none", "n/a", "na", "nan", "null", "undefined"}
 VALID_REGIONS = {"highland", "islay", "speyside", "lowland", "campbeltown", "island"}
@@ -25,41 +57,30 @@ BRAND_REPLACEMENTS_CI = {
 PLACEHOLDER_BRAND = "Independent/Unknown"
 
 
-def _require_cols(df: pd.DataFrame, cols: list[str]) -> None:
-    missing = [c for c in cols if c not in df.columns]
+# ─── Load ────────────────────────────────────────────────────
+def load_raw_data(path: Path) -> pd.DataFrame:
+    """Read the raw CSV and validate that all required columns are present."""
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip()
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
+    return df
 
-def main() -> None:
-    # ----------------------------
-    # Load + column names
-    # ----------------------------
-    df = pd.read_csv(RAW_PATH)
-    df.columns = df.columns.str.strip()
 
-    required_cols = [
-        "scraped_at", "category", "product_id", "name", "brand", "variant",
-        "price_ex_vat_gbp", "unit_price_raw", "region", "promo_label", "status",
-        "product_url", "image_url",
-        "rating_stars", "review_count",
-        "price_inc_vat_gbp", "price_before_discount_gbp",
-        "style_body", "style_richness", "style_smoke", "style_sweetness",
-        "character_notes",
-        "fact_bottler", "fact_country", "fact_region", "fact_cask_type", "fact_colouring",
-    ]
-    _require_cols(df, required_cols)
-
-    # ----------------------------
-    # Drop status if no variance
-    # ----------------------------
+def drop_constant_status(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop the `status` column if every row shares the same value (no signal)."""
     if "status" in df.columns and df["status"].nunique(dropna=False) <= 1:
         df = df.drop(columns=["status"])
+    return df
 
-    # ----------------------------
-    # Enforce schema
-    # ----------------------------
-    df = df.assign(
+
+# ─── Schema + dedup ──────────────────────────────────────────
+def enforce_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Cast every column to its target dtype."""
+    return df.assign(
         scraped_at=pd.to_datetime(df["scraped_at"], errors="coerce"),
         product_id=pd.to_numeric(df["product_id"], errors="coerce").astype("Int64"),
 
@@ -93,21 +114,22 @@ def main() -> None:
         fact_colouring=df["fact_colouring"].astype("string"),
     )
 
-    # ----------------------------
-    # Deduplicate
-    # ----------------------------
+
+def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop exact duplicate rows, then keep the most recent snapshot per product."""
     dedup_cols = [c for c in df.columns if c != "scraped_at"]
     df = df.drop_duplicates(subset=dedup_cols).reset_index(drop=True)
 
-    df = (
+    return (
         df.sort_values("scraped_at")
           .drop_duplicates(subset=["product_id"], keep="last")
           .reset_index(drop=True)
     )
 
-    # ----------------------------
-    # Standardize missing values (text)
-    # ----------------------------
+
+# ─── Missing values + text normalization ────────────────────
+def standardize_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Trim whitespace on text columns and coerce known missing-value tokens to NA."""
     text_cols = [
         c for c in df.select_dtypes(include="string").columns
         if c not in {"product_url", "image_url"}
@@ -124,9 +146,12 @@ def main() -> None:
             .str.strip("|")
         )
 
-    # ----------------------------
-    # Region cleaning (before consolidation)
-    # ----------------------------
+    return df
+
+
+def clean_regions(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize region text, drop invalid single-malt regions, and consolidate
+    with the `fact_region` field scraped from the product-facts panel."""
     df["region"] = (
         df["region"]
         .astype("string")
@@ -143,9 +168,6 @@ def main() -> None:
         "region"
     ] = pd.NA
 
-    # ----------------------------
-    # Consolidate region with fact_region
-    # ----------------------------
     df["fact_region"] = (
         df["fact_region"]
         .astype("string")
@@ -156,11 +178,11 @@ def main() -> None:
 
     df["region"] = df["region"].fillna(df["fact_region"])
     df["region"] = df["region"].str.capitalize()
-    df = df.drop(columns=["fact_region"])
+    return df.drop(columns=["fact_region"])
 
-    # ----------------------------
-    # Brand standardization
-    # ----------------------------
+
+def standardize_brands(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize brand spelling/casing and flag placeholder ("unknown distillery") brands."""
     df["brand"] = (
         df["brand"]
         .astype("string")
@@ -168,24 +190,27 @@ def main() -> None:
         .str.replace(r"\s+", " ", regex=True)
     )
 
-    brand_key_tmp = df["brand"].str.lower()
-    df["brand"] = brand_key_tmp.map(BRAND_REPLACEMENTS_CI).fillna(df["brand"])
+    brand_key = df["brand"].str.lower()
+    df["brand"] = brand_key.map(BRAND_REPLACEMENTS_CI).fillna(df["brand"])
     df["is_brand_placeholder"] = df["brand"].eq(PLACEHOLDER_BRAND)
+    return df
 
-    # ----------------------------
-    # VAT fallback: fill missing price_inc_vat_gbp from price_ex_vat_gbp
-    # ----------------------------
+
+# ─── Price parsing ───────────────────────────────────────────
+def apply_vat_fallback(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Fill missing `price_inc_vat_gbp` from the ex-VAT price where needed.
+
+    Returns the updated frame and the number of rows filled.
+    """
     missing_before = df["price_inc_vat_gbp"].isna().sum()
-    df["price_inc_vat_calc_gbp"] = (df["price_ex_vat_gbp"] * 1.2).round(2)
-    df["price_inc_vat_gbp"] = df["price_inc_vat_gbp"].fillna(df["price_inc_vat_calc_gbp"])
+    price_inc_vat_calc = (df["price_ex_vat_gbp"] * 1.2).round(2)
+    df["price_inc_vat_gbp"] = df["price_inc_vat_gbp"].fillna(price_inc_vat_calc)
     filled = missing_before - df["price_inc_vat_gbp"].isna().sum()
+    return df, int(filled)
 
-    # Keep this calc column or drop it — your choice
-    df = df.drop(columns=["price_inc_vat_calc_gbp"])
 
-    # ----------------------------
-    # Parse bottle size + ABV from variant (ml/cl/l)
-    # ----------------------------
+def parse_bottle_size_and_abv(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract bottle size (litres/cl) and ABV percentage from the `variant` field."""
     vol_amount = pd.to_numeric(
         df["variant"].str.extract(r"(\d+(?:\.\d+)?)\s*(?:ml|cl|l|litre|liter)", expand=False),
         errors="coerce"
@@ -206,10 +231,11 @@ def main() -> None:
         df["variant"].str.extract(r"(\d+(?:\.\d+)?)\s*%", expand=False),
         errors="coerce"
     )
+    return df
 
-    # ----------------------------
-    # Parse unit price to GBP per litre
-    # ----------------------------
+
+def parse_unit_price(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize the scraped unit-price string into GBP per litre."""
     df["unit_price_gbp_per_litre"] = (
         df["unit_price_raw"]
           .astype("string")
@@ -244,10 +270,12 @@ def main() -> None:
     scale.loc[mask_l] = 1.0 / qty.loc[mask_l]
 
     df["unit_price_gbp_per_litre"] = (df["unit_price_gbp_per_litre"] * scale).round(2)
+    return df
 
-    # ----------------------------
-    # Feature engineering: prices + discounts
-    # ----------------------------
+
+# ─── Feature engineering ─────────────────────────────────────
+def engineer_price_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Derive reference price, price-per-alcohol-unit, price tier, and discount metrics."""
     df["reference_price_gbp"] = df["price_before_discount_gbp"].fillna(df["price_inc_vat_gbp"])
 
     df["alcohol_units"] = df["bottle_size_l"] * df["abv_percent"]
@@ -273,10 +301,11 @@ def main() -> None:
         bins=[-0.01, 0, 10, 20, 40, float("inf")],
         labels=["No Discount", "Low (≤10%)", "Medium (10–20%)", "High (20–40%)", "Very High (>40%)"]
     )
+    return df
 
-    # ----------------------------
-    # Feature engineering: age/size/abv
-    # ----------------------------
+
+def engineer_age_size_abv_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Derive age, bottle size, and ABV bands from the parsed product fields."""
     df["age_years"] = pd.to_numeric(
         df["name"].astype("string").str.extract(
             r"\b(\d{1,2})\s*(?:year(?:s)?(?:\s+old)?|yo)\b",
@@ -307,24 +336,69 @@ def main() -> None:
     )
 
     df["is_cask_strength"] = df["abv_percent"] >= 50
+    return df
 
-    # ----------------------------
-    # Safety: replace inf/-inf in numeric cols
-    # ----------------------------
+
+def sanitize_numeric_infinities(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace any +/-inf produced by division (e.g. zero-ABV edge cases) with NaN."""
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     df[numeric_cols] = df[numeric_cols].replace([np.inf, -np.inf], np.nan)
+    return df
 
-    # ----------------------------
-    # Save
-    # ----------------------------
-    df.to_csv(OUT_PATH, index=False)
 
-    # Lightweight terminal validation (minimal, useful)
-    print(f"Saved cleaned dataset: {OUT_PATH}")
-    print(f"Rows: {len(df)}")
-    print(f"Filled price_inc_vat_gbp using VAT fallback: {filled}")
-    print("Discounted products:", int(df["is_discounted"].sum()))
+# ─── Orchestration ───────────────────────────────────────────
+def clean(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Run the full cleaning + feature-engineering pipeline on a raw dataframe."""
+    df = drop_constant_status(df)
+    df = enforce_schema(df)
+    df = deduplicate(df)
+    df = standardize_missing_values(df)
+    df = clean_regions(df)
+    df = standardize_brands(df)
+    df, vat_filled = apply_vat_fallback(df)
+    df = parse_bottle_size_and_abv(df)
+    df = parse_unit_price(df)
+    df = engineer_price_features(df)
+    df = engineer_age_size_abv_features(df)
+    df = sanitize_numeric_infinities(df)
+    return df, vat_filled
+
+
+def resolve_input_path(explicit: str | None) -> Path:
+    if explicit:
+        return Path(explicit)
+    return latest_file(RAW_DATA_DIR, "whisky_raw*.csv")
+
+
+def resolve_output_path(explicit: str | None, input_path: Path) -> Path:
+    if explicit:
+        return Path(explicit)
+    date_suffix = re.search(r"(\d{4}-\d{2}-\d{2})", input_path.stem)
+    tag = date_suffix.group(1) if date_suffix else date.today().isoformat()
+    return ensure_dir(PROCESSED_DATA_DIR) / f"whisky_cleaned_{tag}.csv"
+
+
+def main(input_path: str | None = None, output_path: str | None = None) -> None:
+    in_path = resolve_input_path(input_path)
+    out_path = resolve_output_path(output_path, in_path)
+
+    logger.info("Loading raw data: %s", in_path)
+    df = load_raw_data(in_path)
+
+    df, vat_filled = clean(df)
+
+    df.to_csv(out_path, index=False)
+
+    logger.info("Saved cleaned dataset: %s", out_path)
+    logger.info("Rows: %d", len(df))
+    logger.info("Filled price_inc_vat_gbp using VAT fallback: %d", vat_filled)
+    logger.info("Discounted products: %d", int(df["is_discounted"].sum()))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Clean and enrich raw whisky product data")
+    parser.add_argument("--input", help="Path to raw CSV (default: latest file in data/raw/)")
+    parser.add_argument("--output", help="Path to write cleaned CSV (default: data/processed/whisky_cleaned_<date>.csv)")
+    args = parser.parse_args()
+
+    main(args.input, args.output)
